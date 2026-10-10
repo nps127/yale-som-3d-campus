@@ -4,7 +4,9 @@ import World from './World.jsx'
 import Player from './Player.jsx'
 import Minimap from './Minimap.jsx'
 import TouchControls from './TouchControls.jsx'
+import ChatWindow from './ChatWindow.jsx'
 import { EYE, SPAWN } from './layout.js'
+import { TALKERS, closeChat, openChat, typing, useChat } from './chat.js'
 
 export default function App() {
   const [locked, setLocked] = useState(false)
@@ -24,11 +26,25 @@ export default function App() {
     setTouchOn(on)
   }
   const playing = locked || touchOn
+  const { open: chatWith, aimed } = useChat()
   useEffect(() => {
-    const k = (e) => e.code === 'KeyM' && setShowMap((v) => !v)
+    const k = (e) => e.code === 'KeyM' && !typing(e) && setShowMap((v) => !v)
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [])
+
+  // chatting frees the mouse (or pauses the joystick) so you can type; closing drops you back in
+  useEffect(() => {
+    if (!chatWith) return
+    if (document.pointerLockElement) document.exitPointerLock()
+    touchRef.current.active = false
+    touchRef.current.move = [0, 0]
+  }, [chatWith])
+  const endChat = useCallback(() => {
+    closeChat()
+    if (touchOn) touchRef.current.active = true
+    else lockRef.current?.()
+  }, [touchOn])
 
   return (
     <>
@@ -50,10 +66,16 @@ export default function App() {
       <button className="maptoggle" onClick={() => setShowMap((s) => !s)}>
         {showMap ? 'hide map' : 'map'}
       </button>
-      {playing && <div className="crosshair" />}
-      {touchOn && <TouchControls touchRef={touchRef} onPause={() => setTouch(false)} />}
+      {playing && !chatWith && <div className={aimed ? 'crosshair on' : 'crosshair'} />}
+      {touchOn && !chatWith && <TouchControls touchRef={touchRef} onPause={() => setTouch(false)} />}
+      {playing && !chatWith && aimed && (
+        <button className="talkhint" onClick={() => openChat(aimed)} tabIndex={-1}>
+          {isTouch || touchOn ? 'Tap to talk to' : 'Click to talk to'} <b>Prof. {TALKERS[aimed].name.split(' ').slice(-1)[0]}</b>
+        </button>
+      )}
+      {chatWith && <ChatWindow profId={chatWith} onClose={endChat} />}
 
-      {!playing && (
+      {!playing && !chatWith && (
         <div className="overlay" onClick={() => (isTouch ? setTouch(true) : lockRef.current?.())}>
           <div className="card">
             <div className="kicker">Yale SOM · Evans Hall</div>

@@ -15,3 +15,4 @@ data/private/
 # python
 .venv/
 __pycache__/
+!.env.example
